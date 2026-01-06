@@ -1,17 +1,49 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+import yaml
 # ============================================================
 # SYSTEM PARAMETERS (MUST MATCH TX)
 # ============================================================
-BIT_RATE    = 4.8e3        # 4.8 kbps
-SAMPLE_RATE = 96e3         # 96 kSps
-FREQ_DEV    = 4.5e3        # ±4.5 kHz
-NUM_BITS    = 1000
+def load_config(yaml_file):
+    with open(yaml_file, "r") as f:
+        cfg = yaml.safe_load(f)
+    return cfg
+
+cfg = load_config("config/config.yaml")
+fsk_modem_cfg = cfg["fsk_modem"]
+
+BIT_RATE    = fsk_modem_cfg["bit_rate"]* 1e3
+SAMPLE_RATE = fsk_modem_cfg["sampling_rate"]*1e3  # 96 kSps (exact 20 samples/bit)
+FREQ_DEV    = fsk_modem_cfg["freq_dev"]*1e3        # ±4.5 kHz
+NUM_BITS    = fsk_modem_cfg["num_bits"];
 
 SAMPLES_PER_BIT = int(SAMPLE_RATE / BIT_RATE)  # = 20
 
-RX_NPY_FILE = "tx_fsk.npy"   # <<< INPUT IQ FILE
+RX_NPY_FILE = "rx_fsk.npy"   # <<< INPUT IQ FILE
+
+def hex_to_bits(value, num_bits):
+    """
+    Convert hex/int value to MSB-first bit array
+    """
+    return np.array(
+        [(value >> (num_bits - 1 - i)) & 1 for i in range(num_bits)],
+        dtype=np.int8
+    )
+
+def find_preamble_strict(rx_bits, preamble_bits):
+    rx_bits = np.asarray(rx_bits).astype(np.int8)
+    preamble_bits = np.asarray(preamble_bits).astype(np.int8)
+
+    L = len(preamble_bits)
+
+    for i in range(len(rx_bits) - L + 1):
+    #for i in range(4):
+        window = rx_bits[i:i+L]
+        #print(f"window = {window},preamble_bits={preamble_bits}");
+        if np.array_equal(window, preamble_bits):
+            return i
+
+    return None
 
 # ============================================================
 # LOAD RX IQ SAMPLES
@@ -51,17 +83,57 @@ for i in range(num_rx_bits):
 
 rx_bits = np.array(rx_bits, dtype=np.int8)
 
-print("Decoded bits:", len(rx_bits))
+
+# Known preamble
+preamble_bits = hex_to_bits(0xAAAA_AAAA, 32)
+
+# rx_bits comes from FSK demodulator
+start = find_preamble_strict(rx_bits, preamble_bits)
+
+if start is None:
+    print("Preamble NOT found")
+else:
+    print(f"Preamble found at bit index {start}")
+
+    # Extract payload (skip preamble)
+    payload_start = start + len(preamble_bits)
+    payload_bits = rx_bits[payload_start:]
+
+
+print("Decoded bits:",len(payload_bits))
+
+
+
 
 # ============================================================
 # OPTIONAL: DEBUG PLOTS
 # ============================================================
 
-print("Loaded RX IQ samples")
-print("Total samples:", len(rx_iq))
-print("First 100 RX bits:", rx_bits[-20:]);
-print("Samples per bit:", SAMPLES_PER_BIT)
+def plot_fsk_spectrum(iq, fs, title="FSK RX Spectrum"):
+    """
+    Plot FFT-based spectrum from complex IQ
+    """
+    N = len(iq)
 
+    # Windowing (VERY IMPORTANT)
+    window = np.hanning(N)
+    iq_win = iq * window
+
+    # FFT
+    spectrum = np.fft.fftshift(np.fft.fft(iq_win))
+    freq = np.fft.fftshift(np.fft.fftfreq(N, d=1/fs))
+
+    # Convert to dB
+    spectrum_db = 20 * np.log10(np.abs(spectrum) + 1e-12)
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(freq/1e3, spectrum_db)
+    plt.xlabel("Frequency (kHz)")
+    plt.ylabel("Magnitude (dB)")
+    plt.title(title)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 
 # Plot instantaneous frequency for a few bits
@@ -80,6 +152,19 @@ print("Samples per bit:", SAMPLES_PER_BIT)
 # ============================================================
 # If you saved tx_bits separately, load and compare:
 tx_bits = np.load("tx_bits.npy")
-ber = np.mean(tx_bits[:len(rx_bits)] != rx_bits)
+
+# Extract payload (skip preamble)
+tx_bits = tx_bits[len(preamble_bits):]
+
+ber = np.mean(tx_bits[:len(payload_bits)] != payload_bits[:len(payload_bits)])
+
+#plot_fsk_spectrum(rx_iq, SAMPLE_RATE)
+
+
+print("Loaded RX IQ samples")
+print("Total samples:", len(rx_bits))
+print("First 100 TX bits:", tx_bits[:20])
+print("First 100 RX bits:", payload_bits[:20])
+print("Samples per bit:", SAMPLES_PER_BIT)
 print("BER:", ber)
-print("==================================end of FSK Tx===================================================")
+print("==================================end of FSK Rx===================================================")
