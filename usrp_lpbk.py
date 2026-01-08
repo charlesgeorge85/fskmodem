@@ -152,7 +152,7 @@ rx_power_db = compute_power_db(rx_buffer)
 # Print Results
 ############################
 print("========== POWER MEASUREMENTS ==========")
-print(f"Center Freq : {usrp.get_tx_freq()/1e9:.2f} Ghz")
+print(f"Center Freq : {usrp.get_tx_freq()/1e6:.2f} Mhz")
 print(f"Sampling Rate : {usrp.get_tx_rate()/1e6:.2f} Msps")
 print(f"TX Gain : {usrp.get_tx_gain():.2f} dB (relative)")
 print(f"RX Gain : {usrp.get_rx_gain():.2f} dB (relative)")

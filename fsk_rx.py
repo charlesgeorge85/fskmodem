@@ -20,6 +20,7 @@ NUM_BITS    = fsk_modem_cfg["num_bits"];
 SAMPLES_PER_BIT = int(SAMPLE_RATE / BIT_RATE)  # = 20
 
 RX_NPY_FILE = "rx_fsk.npy"   # <<< INPUT IQ FILE
+PAD_LEN = fsk_modem_cfg["padding_len"]
 
 def hex_to_bits(value, num_bits):
     """
@@ -85,8 +86,8 @@ rx_bits = np.array(rx_bits, dtype=np.int8)
 
 
 # Known preamble
-preamble_bits = hex_to_bits(0xAAAA_AAAA, 32)
-
+#preamble_bits  = hex_to_bits(0x55_55_55_55_55_55_55_55, 8*8)  
+preamble_bits  = hex_to_bits(0x55_55_55_55_55_55_55_55_93_0B_51_DE, 12*8)  
 # rx_bits comes from FSK demodulator
 start = find_preamble_strict(rx_bits, preamble_bits)
 
@@ -154,7 +155,7 @@ def plot_fsk_spectrum(iq, fs, title="FSK RX Spectrum"):
 tx_bits = np.load("tx_bits.npy")
 
 # Extract payload (skip preamble)
-tx_bits = tx_bits[len(preamble_bits):]
+tx_bits = tx_bits[PAD_LEN + len(preamble_bits):]
 
 ber = np.mean(tx_bits[:len(payload_bits)] != payload_bits[:len(payload_bits)])
 

@@ -23,6 +23,7 @@ TX_NPY_FILE = "tx_fsk.npy"  # OUTPUT INPUT FILE
 
 AWGN_ENABLE = fsk_modem_cfg["awgn_enable"]
 SNR_DB = fsk_modem_cfg["snr"]
+PAD_LEN = fsk_modem_cfg["padding_len"]
 
 # =========================
 # UTILITIES
@@ -81,11 +82,13 @@ def bfsk_modulate(bits, fs, spb, freq_dev):
 # TEST SIGNAL GENERATION
 # ============================================================
 np.random.seed(0)
+padding_bits = np.zeros(PAD_LEN, dtype=np.int8)
+preamble_bits  = hex_to_bits(0x55_55_55_55_55_55_55_55_93_0B_51_DE, 12*8)  
 tx_bits = np.random.randint(0, 2, NUM_BITS)
-preamble_bits  = hex_to_bits(0xAAAA_AAAA, 32)  
-postamble_bits = hex_to_bits(0x5555, 16)  
+postamble_bits = hex_to_bits(0xAA_AA, 2*8)  
 
 tx_bits = np.concatenate([
+    padding_bits,
     preamble_bits,
     tx_bits,
     postamble_bits
@@ -106,9 +109,10 @@ if AWGN_ENABLE:
     tx_iq = add_awgn(tx_iq, SNR_DB)
 
 print("Generated 2-FSK waveform")
-print("Samples per bit:", SAMPLES_PER_BIT)
-print("First 20 TX bits:", tx_bits[:20]);
-print("Total samples:", len(tx_iq))
+print("Samples per bit :", SAMPLES_PER_BIT)
+print("Total Bits      :", len(tx_bits))
+print("First 100 TX bits:", tx_bits[:100]);
+print("Total IQ samples:", len(tx_iq))
 
 ############################
 # SAVE TO .NPY FILE
