@@ -1,13 +1,15 @@
 fsk_modem:
   bit_rate: 19.2 #Kbps
-  sampling_rate: 196 #Ksps
+  sampling_rate: 192 #Ksps
   freq_dev: 4.3 #KHz  
-  num_bits: 128
-  awgn_enable: False 
+  num_bits: 10240
+  awgn_en: False 
+  chfir_en: True 
   snr: 9 #dB
-  padding_len: 20  
-
+  padding_len: 4 
+  loopBack_en: True
 usrp:
   band: n78
-  center_freq: 440 #MHxz
-  sampling_rate: 196 #KSPS
+  center_freq: 435 #MHxz
+  sampling_rate: 192 #KSPS
+  rx_duration_sec: 2 # sec  

@@ -23,19 +23,21 @@ CENTER_FREQ =  usrp_cfg["center_freq"]*1e6
 SAMPLE_RATE =  usrp_cfg["sampling_rate"]*1e3
 TX_GAIN = -25              # dB
 RX_GAIN = 0                # dB
-
-############################
+RX_DURATION_SEC = 2           # Capture duration (seconds)
+NUM_SAMPLES = int(SAMPLE_RATE * RX_DURATION_SEC)
+#===========================
 # Load TX samples from .npy
-############################
+#===========================
 tx_signal = np.load(TX_NPY_FILE).astype(np.complex64)
 num_samples = len(tx_signal)
 
 print("Loaded TX samples :", num_samples)
 
-############################
+#===========================
 # Create USRP Object
-############################
-usrp = uhd.usrp.MultiUSRP("master_clock_rate=200e6")
+#===========================
+usrp = uhd.usrp.MultiUSRP("master_clock_rate=184.32e6")
+#usrp = uhd.usrp.MultiUSRP("master_clock_rate=200e6")
 
 usrp.set_clock_source("external")   # or "gpsdo"
 usrp.set_time_source("external")
@@ -54,9 +56,9 @@ usrp.set_rx_antenna("RX2",0)
 
 time.sleep(1)
 
-############################
+#===========================
 # TX Streamer
-############################
+#===========================
 tx_streamer = usrp.get_tx_stream(
     uhd.usrp.StreamArgs("fc32", "sc16")
 )
@@ -65,30 +67,35 @@ tx_md = uhd.types.TXMetadata()
 tx_md.start_of_burst = True
 tx_md.end_of_burst = False
 
-############################
+#===========================
 # RX Streamer
-############################
+#===========================
 rx_streamer = usrp.get_rx_stream(
     uhd.usrp.StreamArgs("fc32", "sc16")
 )
 
 rx_md = uhd.types.RXMetadata()
-rx_buffer = np.zeros(num_samples, dtype=np.complex64)
+rx_buffer = np.zeros(NUM_SAMPLES, dtype=np.complex64)
 
-############################
+#===========================
 # START RX FIRST (IMPORTANT)
-############################
-usrp.issue_stream_cmd(
-    uhd.types.StreamCMD(
-        uhd.types.StreamMode.start_cont
-    )
-)
+#===========================
+stream_cmd = uhd.types.StreamCMD(uhd.types.StreamMode.start_cont)
+stream_cmd.stream_now = True
+usrp.issue_stream_cmd(stream_cmd)
 
-#time.sleep(0.05)  # allow RX pipeline to arm
+#print("RX started...")
+#usrp.issue_stream_cmd(
+#    uhd.types.StreamCMD(
+#        uhd.types.StreamMode.start_cont
+#    )
+#)
+#
+time.sleep(0.05)  # allow RX pipeline to arm
 
-############################
+#===========================
 # TRANSMIT FROM .NPY
-############################
+#===========================
 num_sent = tx_streamer.send(tx_signal, tx_md)
 print("TX samples sent :", num_sent)
 
@@ -96,32 +103,35 @@ tx_md.start_of_burst = False
 tx_md.end_of_burst = True
 tx_streamer.send(np.zeros(1, dtype=np.complex64), tx_md)
 
-############################
+#===========================
 # RECEIVE
-############################
-num_rx = rx_streamer.recv(rx_buffer, rx_md, timeout=3.0)
-print("RX samples received :", num_rx)
+#===========================
+#num_rx = rx_streamer.recv(rx_buffer, rx_md, timeout=3.0)
+num_rx = rx_streamer.recv(rx_buffer, rx_md, timeout=RX_DURATION_SEC + 1.0)
 
-usrp.issue_stream_cmd(
-    uhd.types.StreamCMD(
-        uhd.types.StreamMode.stop_cont
-    )
-)
-
+#===========================
+# STOP RX
+#===========================
+usrp.issue_stream_cmd(uhd.types.StreamCMD(uhd.types.StreamMode.stop_cont))
 rx_buffer = rx_buffer[:num_rx]
+print(f"RX samples received : {num_rx}")
 
-
-
+#usrp.issue_stream_cmd(
+#    uhd.types.StreamCMD(
+#        uhd.types.StreamMode.stop_cont
+#    )
+#)
+#
+#rx_buffer = rx_buffer[:num_rx]
 rx_buffer = rx_buffer.astype(np.complex64)
-
-############################
+#===========================
 # SAVE TO .NPY FILE
-############################
+#===========================
 np.save(RX_NPY_FILE, rx_buffer)
 
-############################
+#===========================
 # Power Calculations
-############################
+#===========================
 def compute_power_db(samples):
     return 10 * np.log10(np.mean(np.abs(samples)**2) + 1e-12)
 
@@ -148,12 +158,12 @@ rx_power_db = compute_power_db(rx_buffer)
 #plt.tight_layout()
 #plt.show()
 
-############################
+#===========================
 # Print Results
-############################
+#===========================
 print("========== POWER MEASUREMENTS ==========")
 print(f"Center Freq : {usrp.get_tx_freq()/1e6:.2f} Mhz")
-print(f"Sampling Rate : {usrp.get_tx_rate()/1e6:.2f} Msps")
+print(f"Sampling Rate : {usrp.get_tx_rate()/1e3:.2f} Ksps")
 print(f"TX Gain : {usrp.get_tx_gain():.2f} dB (relative)")
 print(f"RX Gain : {usrp.get_rx_gain():.2f} dB (relative)")
 print(f"TX Baseband Power : {tx_power_db:.2f} dB (relative)")
